@@ -238,7 +238,7 @@ static int NodeProcess(line_t* line, node_t* node, int param){
         }
 
         else if (line->id[node->data.id].visibilityType == LOCAL){
-            PRNT_CUSTOM("pop [%d]", line->id[node->data.id].memAddr);
+            PRNT_CUSTOM("pop qword [rbp - %d]", line->id[node->data.id].memAddr * 8); //???
         }
     }
 
@@ -248,7 +248,7 @@ static int NodeProcess(line_t* line, node_t* node, int param){
         }
 
         else{
-            PRNT_CUSTOM("push [rsp + %d]", line->id[node->data.id].memAddr * 8);
+            PRNT_CUSTOM("push qword [rbp - %d]", line->id[node->data.id].memAddr * 8);
         }
     }
     //ID
@@ -396,6 +396,16 @@ static int ProcessDef(line_t* line, node_t* node){
     PRNT_CUSTOM("jmp def_func_end%d",   node->left->left->data.id);
     PRNT_CUSTOM("def_func%d:", node->left->left->data.id);
 
+    PRNT("push rbp", " ");
+    PRNT("mov rbp, rsp", " ");
+    PRNT_CUSTOM("sub rsp, %d", line->id[node->left->left->data.id].stackFrameSize * 8 + 8);
+
+    int params = line->id[node->left->left->data.id].numParams;
+    for (int i = params; i > 0; i--){
+        PRNT_CUSTOM("push qword [meow + %d]", i * 8);
+        PRNT_CUSTOM("pop qword [rbp - %d]", i * 8);
+    }
+
     NodeProcess(line, node->right, DFLT);
 
     PRNT_CUSTOM("def_func_end%d:", node->left->left->data.id);
@@ -404,22 +414,19 @@ static int ProcessDef(line_t* line, node_t* node){
 }
 
 static int ProcessCall(line_t* line, node_t* node){
-    PRNT        ("push rsp", "Я НАЧАЛО ВЫЗОВ ФУНКЦИЯ");
+    PRNT        (" ", "Я НАЧАЛО ВЫЗОВ ФУНКЦИЯ");
 
     NodeProcess(line, node->left->right, DFLT);
-
-    PRNT_CUSTOM ("sub rsp, %d", line->id[node->left->left->data.id].stackFrameSize);
 
     int params = line->id[node->left->left->data.id].numParams; // num params
 
     for (int i = params; i > 0; i--){
-        PRNT_CUSTOM("pop qword [rsp + %d]", i * 8);
+        PRNT_CUSTOM("pop qword [meow + %d]", i * 8);
     }
 
-    PRNT_CUSTOM ("call def_func%d:", node->left->left->data.id);
-    PRNT        ("pop rsp", " ");
+    PRNT_CUSTOM ("call def_func%d", node->left->left->data.id);
 
-    PRNT        ("push ax", " ");
+    PRNT        ("push rax", " ");
 
     return OK;
 }
@@ -438,8 +445,8 @@ static int ProcessOp(line_t* line, node_t* node){
 
         // -
         case O_SUB:
-            PRNT("pop rbx", "МИНУС");
-            PRNT("pop rax", " ");
+            PRNT("pop rax", "МИНУС");
+            PRNT("pop rbx", " ");
             PRNT("sub rax, rbx", " ");
             PRNT("push rax", " ");
             break;
@@ -490,7 +497,9 @@ static int ProcessOp(line_t* line, node_t* node){
 
         // return
         case O_RET:
-            PRNT("pop ax", " ");
+            PRNT("pop rax", " ");
+            PRNT("mov rsp, rbp", " ");
+            PRNT("pop rbp", " ");
             PRNT("ret", " ");
             break;
 
@@ -508,8 +517,8 @@ static int ProcessOp(line_t* line, node_t* node){
             PRNT("push 0d", " ");
             PRNT_JMP("jmp less_end", "");
             PRNT_JMP_MARK("less", "");
-            PRNT("push 1d", "МЕНЬШЕ КОНЕЦ");
-            PRNT_JMP_MARK("less_end", "");
+            PRNT("push 1d", "");
+            PRNT_JMP_MARK("less_end", "МЕНЬШЕ КОНЕЦ");
 
             break;
 
@@ -530,7 +539,15 @@ static int ProcessOp(line_t* line, node_t* node){
 
         // ==
         case O_EQQ:
-            PRNT("equal", " ");
+            PRNT("pop rax", "РАВНО");
+            PRNT("pop rbx", " ");
+            PRNT("cmp rax, rbx", " ");
+            PRNT_JMP("je eq", "");
+            PRNT("push 0d", " ");
+            PRNT_JMP("jmp eq_end", "");
+            PRNT_JMP_MARK("eq", "");
+            PRNT("push 1d", "");
+            PRNT_JMP_MARK("eq_end", "РАНВО КОНЕЦ");
             break;
 
         // !=

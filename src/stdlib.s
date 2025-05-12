@@ -180,6 +180,13 @@ printBuff:
     mov rsi, Buffer         ; buffer
     syscall
 
+
+    mov rax, 0x01           ; write64 (rdi, rsi, rdx)
+    mov rdi, 1              ; stdout
+    mov rsi, Space         ; buffer
+    mov rdx, 1
+    syscall
+
     ret
 
 ;================================================================================
@@ -189,4 +196,6 @@ section     .data
 readBuffer: times BuffSize db "$"
 Buffer:     times BuffSize db "0"
 digitBuff:  times 64d      db "0"
+meow:       times 64d      db "0"
+Space:      dq 0xa
 alphabet:   db "0123456789abcdef"
