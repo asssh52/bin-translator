@@ -58,6 +58,7 @@ const char*   DFLT_SAVE_FILE = "save.txt";
 const char*   DFLT_OUT_FILE  = "out.txt";
 const char*   DFLT_DOT_FILE  = "./bin/dot.dot";
 const char*   DFLT_LIB_FILE  = "./src/stdlib.s";
+const char*   DFLT_CMPL_FILE = "./src/stdlibCmpl.out";
 
 const int64_t X86BUFF_SIZE      = 0x10000;
 const int64_t OFFSET            = 0x1000;
@@ -135,8 +136,11 @@ static int PopMem                   (line_t* line, int mem);
 static int PopMemRBP                (line_t* line, char offset);
 static int PushNum                  (line_t* line, int num);
 
-int main(){
+int main(int argc, char* argv[]){
     line_t* line = (line_t*)calloc(1, sizeof(*line));
+
+    printf("argc:%d, argv[1]:%s\n", argc, argv[1]);
+    if (argc == 2) line->files.saveName = argv[1];
 
     BackCtor(line);
 
@@ -166,7 +170,7 @@ int main(){
     fwrite(line->x86buff, X86BUFF_SIZE, 1, line->files.elf);
 
 
-    printf(RED "'%c %c %c %c'\n" RESET, line->x86buff[0], line->x86buff[1], line->x86buff[2], line->x86buff[3]);
+    printf(RED "'%c%c%c%c'\n" RESET, line->x86buff[0], line->x86buff[1], line->x86buff[2], line->x86buff[3]);
 
     DumpIds(line, stdout);
 
@@ -210,8 +214,8 @@ static int ProgrammHeaderProcess(line_t* line){
 
 static int StdlibProcess(line_t* line){
 
-    FILE* cmpld = fopen("./src/stdlibCmpl.out", "r");
-    size_t cmpldFileSize = getFileSize("./src/stdlibCmpl.out");
+    FILE* cmpld = fopen(DFLT_CMPL_FILE, "r");
+    size_t cmpldFileSize = getFileSize(DFLT_CMPL_FILE);
 
     char* cmpldBuff = (char*) calloc(X86BUFF_SIZE, 1);
     fread(cmpldBuff, cmpldFileSize, 1, cmpld);
@@ -481,10 +485,10 @@ static int BackCtor(line_t* line){
 
 static int BackDtor(line_t* line){
 
-    fclose(line->files.save);
-    fclose(line->files.elf);
-    fclose(line->files.html);
-    fclose(line->files.out);
+    if (line->files.save) fclose(line->files.save);
+    if (line->files.elf) fclose(line->files.elf);
+    if (line->files.html) fclose(line->files.html);
+    if (line->files.out) fclose(line->files.out);
     free(line->x86buff);
     free(line->tree);
     free(line->id);
