@@ -19,6 +19,9 @@ typedef struct files{
     const char* saveName;
     FILE* save;
 
+    const char* elfName;
+    FILE* elf;
+
     const char* outName;
     FILE* out;
 
@@ -88,6 +91,14 @@ typedef struct line{
 
     //BACKEND
     int         freeAddr;
+    char*       x86buff;
+    size_t      currAddr;
+    size_t      fileSize;
+    size_t      entryPoint;
+    size_t      globalVars;
+    size_t      stdFuncs;
+    size_t      additionalBuff;
+    int64_t*    stdFuncsOffset;
 
     //LEXICAL
     bool        err;

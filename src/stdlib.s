@@ -2,6 +2,15 @@ section     .text
 
 BuffSize equ 100h
 
+mov rsi, 666
+call printNum
+call exitProg
+
+dq getNum
+dq printNum
+dq exitProg
+
+
 ;================================================================================
 ;OUT: RSI - number
 ;================================================================================
@@ -190,9 +199,7 @@ printBuff:
     ret
 
 ;================================================================================
-
-section     .data
-
+section .data
 readBuffer: times BuffSize db "$"
 Buffer:     times BuffSize db "0"
 digitBuff:  times 64d      db "0"
