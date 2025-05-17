@@ -98,7 +98,7 @@ call [std + 16]
 </div>
 
 ### Полезные/использованные ссылки
-- (Кодировка x86-64 команд)[https://wiki.osdev.org/X86-64_Instruction_Encoding#ModR.2FM]
-- (Фрагмент документации Intel)[https://studfile.net/preview/1583048/page:5/#14]
-- (Описание структуры ELF-файлов)[https://ru.wikipedia.org/wiki/Executable_and_Linkable_Format]
-- (Статья про ELF-файлы)[https://habr.com/ru/articles/480642/]
+- [Кодировка x86-64 команд](https://wiki.osdev.org/X86-64_Instruction_Encoding#ModR.2FM)
+- [Фрагмент документации Intel](https://studfile.net/preview/1583048/page:5/#14)
+- [Описание структуры ELF-файлов](https://ru.wikipedia.org/wiki/Executable_and_Linkable_Format)
+- [Статья про ELF-файлы](https://habr.com/ru/articles/480642/)
