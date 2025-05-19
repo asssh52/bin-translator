@@ -251,7 +251,6 @@ static int StdlibProcess(line_t* line){
 
     line->globalVars = line->currAddr;
     line->currAddr    += line->numId * 8; // space for global variables
-    line->currAddr    += MAX_ARGS * 8;
     line->entryPoint = line->currAddr;
 
     return OK;
