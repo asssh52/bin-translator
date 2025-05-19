@@ -23,13 +23,13 @@
 #define PUSHR 0x50
 #define POPR 0x58
 
-#define JMP 0xE9
-#define JZ  0x0F84
-#define JL  0x0F8C
+#define JMP "\xE9"
+#define JZ  "\x0F\x84"
+#define JL  "\x0F\x8C"
 
-#define RET 0xC3
+#define RET "\xC3"
 
-#define CALL 0xE8
+#define CALL "\xE8"
 
 #define JMP_SIZE 5
 #define JZ_SIZE 6

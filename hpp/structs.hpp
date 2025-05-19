@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cstdint>
+#include <elf.h>
 
 typedef struct files{
 
@@ -98,6 +99,8 @@ typedef struct line{
     size_t      globalVars;
     size_t      stdFuncs;
     size_t      additionalBuff;
+    Elf64_Ehdr  elfEhdr;
+    Elf64_Phdr  elfPhdr;
     int64_t*    stdFuncsOffset;
 
     //LEXICAL

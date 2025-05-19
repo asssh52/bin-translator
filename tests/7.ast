@@ -12,8 +12,34 @@
 				}
 			}
 			{OP:";"
-				{OP:"return"
-					{NUM:"0"}
+				{OP:"if"
+					{OP:"=="
+						{ID:"A"}
+						{NUM:"1"}
+					}
+					{OP:";"
+						{OP:"return"
+							{NUM:"1"}
+						}
+					}
+				}
+				{OP:";"
+					{OP:"return"
+						{OP:"*"
+							{ID:"A"}
+							{OP:"call"
+								{OP:"spec"
+									{ID:"fact"}
+									{OP:","
+										{OP:"-"
+											{ID:"A"}
+											{NUM:"1"}
+										}
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 		}

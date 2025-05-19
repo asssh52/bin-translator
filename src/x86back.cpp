@@ -19,15 +19,12 @@
 
 #define PRNT_CUSTOM_DATA(...)       PlaceSpaces(line, fprintf(line->files.out, __VA_ARGS__), __LINE__, 1)
 
-#define QWORD(num)              PutWord(line, num, 8, DIRECT);
-#define DWORD(num)              PutWord(line, num, 4, DIRECT);
-#define WORD(num)               PutWord(line, num, 2, DIRECT);
-#define BYTE(num)               PutWord(line, num, 1, DIRECT);
+#define EMIT(str)               PutWord(line, str, sizeof(str) - 1);
 
-#define QWORD_NUM(num)          PutWord(line, num, 8, REVERSED);
-#define DWORD_NUM(num)          PutWord(line, num, 4, REVERSED);
-#define WORD_NUM(num)           PutWord(line, num, 2, REVERSED);
-#define BYTE_NUM(num)           PutWord(line, num, 1, REVERSED);
+#define QWORD_NUM(num)          *(int64_t*)(line->x86buff + line->currAddr) = num;  line->currAddr += 8;
+#define DWORD_NUM(num)          *(int*)    (line->x86buff + line->currAddr) = num;  line->currAddr += 4;
+#define WORD_NUM(num)           *(int16_t*)(line->x86buff + line->currAddr) = num;  line->currAddr += 2;
+#define BYTE_NUM(num)           *(char*)   (line->x86buff + line->currAddr) = num;  line->currAddr += 1;
 
 #define PUSH_NUM(num)           PushNum(line, num);
 #define PUSH_REG(reg)           PushReg(line, reg);
@@ -44,9 +41,9 @@
 
 //===============================================================================================================================================
 //          NOTES
-// todo: backDtor
+//
 //  careful with .data in the end of stdlib.s
-//  max func arg - 16, (change command for pushing [rbp - c])
+//  max func arg == 16, (change command for pushing [rbp - c])
 //
 //
 //
@@ -123,7 +120,7 @@ static size_t   getFileSize      (const char* filename);
 static int ElfHeaderProcess         (line_t* line);
 static int EndElfProcess            (line_t* line);
 static int ProgrammHeaderProcess    (line_t* line);
-static int PutWord                  (line_t* line, int64_t num, int bytes, int order);
+static int PutWord                  (line_t* line, const char* str, int len);
 static int StdlibProcess            (line_t* line);
 static int PopReg                   (line_t* line, int reg);
 static int PushReg                  (line_t* line, int reg);
@@ -148,7 +145,6 @@ int main(int argc, char* argv[]){
 
     SetNameTypes(line, line->tree->root);
     DumpIds(line, stdout);
-
 
     // elf creating
     ElfHeaderProcess(line);
@@ -182,30 +178,42 @@ int main(int argc, char* argv[]){
 
 static int ElfHeaderProcess(line_t* line){
 
-    QWORD(0x7f454c4602010100); // [0-3] SIGN [4-7] x64 LITTLE-ENDIAN VER. 1 UNIX
-    QWORD(0x0);                // PADDING BYTE
-    QWORD(0x02003e0001000000); // [0-1] FILE TYPE [2-3] SYSTEM (x86-64) [4-7] VER
-    QWORD(0x0010400000000000); // ENTRY POINT!!!!!! addr 18
+    line->elfEhdr.e_ident[0] = ELFMAG0;
+    line->elfEhdr.e_ident[1] = ELFMAG1;
+    line->elfEhdr.e_ident[2] = ELFMAG2;
+    line->elfEhdr.e_ident[3] = ELFMAG3;
+    line->elfEhdr.e_ident[4] = ELFCLASS64;
+    line->elfEhdr.e_ident[5] = ELFDATA2LSB;
+    line->elfEhdr.e_ident[6] = EV_CURRENT;
+    line->elfEhdr.e_ident[7] = ELFOSABI_SYSV;
 
-    QWORD(0x4000000000000000); // PROGRAMM HEADER OFFSET
-    QWORD(0x0);                // SECTION HEADER OFFSET
-    QWORD(0x0000000040003800); // [0-3] CPU FLAGS [4-5] PROGRAMM HEADER SIZE [6-7] HEADER SIZE
-    QWORD(0x0200400000000000); // [0-1] PROGRAMM HEADER COUNT [2-3] SECTION HEADER SIZE [4-5] SECTION HEADER COUNT [6-7] INDEX IN .shstrtab
-
+    line->elfEhdr.e_type        = ET_EXEC;
+    line->elfEhdr.e_machine     = EM_X86_64;
+    line->elfEhdr.e_version     = EV_CURRENT;
+    line->elfEhdr.e_entry       = 0x0;  // filled later
+    line->elfEhdr.e_phoff       = 0x40; // pheader offset
+    line->elfEhdr.e_shoff       = 0x0;
+    line->elfEhdr.e_flags       = 0x0;
+    line->elfEhdr.e_ehsize      = 0x40;
+    line->elfEhdr.e_phentsize   = 0x38;
+    line->elfEhdr.e_phnum       = 0x2;
+    line->elfEhdr.e_shentsize   = 0x40;
+    line->elfEhdr.e_shnum       = 0x0;
+    line->elfEhdr.e_shstrndx    = 0x0;
 
     return OK;
 }
 
 static int ProgrammHeaderProcess(line_t* line){
 
-    QWORD(0x0100000007000000);  // [0-3] p_type [4-7] p_flags
-    QWORD_NUM(OFFSET);          // offset
-    QWORD_NUM(MEM_START);       // virtual address
-    QWORD_NUM(MEM_START);       // physical address
-
-    QWORD(0x8050000000000000);  // file size!!! addr 60
-    QWORD(0x8050000000000000);  // mem size     addr 68
-    QWORD_NUM(OFFSET);          // alignment
+    line->elfPhdr.p_type    = PT_LOAD;
+    line->elfPhdr.p_flags   = PF_X + PF_W + PF_R;
+    line->elfPhdr.p_offset  = OFFSET;
+    line->elfPhdr.p_vaddr   = MEM_START;
+    line->elfPhdr.p_paddr   = MEM_START;
+    line->elfPhdr.p_filesz  = 0x0;  //filled later
+    line->elfPhdr.p_memsz   = 0x0;  //filled later
+    line->elfPhdr.p_align   = OFFSET;
 
     line->currAddr   = 0x1000;
 
@@ -253,37 +261,33 @@ static int StdlibProcess(line_t* line){
 static int EndElfProcess(line_t* line){
     size_t size = line->currAddr - OFFSET;
 
-    *(int64_t*)(line->x86buff + 0x18) = line->entryPoint - OFFSET + MEM_START;
-
     printf(BLU "entry point: %lx\n" RESET, line->entryPoint - OFFSET + MEM_START);
-    *(int64_t*)(line->x86buff + 0x60) = size;
-    *(int64_t*)(line->x86buff + 0x68) = size;
+
+    line->elfPhdr.p_filesz  = size;
+    line->elfPhdr.p_memsz   = size;
+
+    line->elfEhdr.e_entry = line->entryPoint - OFFSET + MEM_START;
+
+    memcpy(line->x86buff, &(line->elfEhdr), sizeof(Elf64_Ehdr));
+    memcpy(line->x86buff + 0x40, &(line->elfPhdr), sizeof(Elf64_Phdr));
 
     return OK;
 }
 
-static int PutWord(line_t* line, int64_t num, int bytes, int order){
+static int PutWord(line_t* line, const char* str, int len){
 
-    int64_t buff = num;
+    printf("str:%d\n", len);
 
-    if (!order)
-        for (int i = 0; i < bytes; i++){
-            *(line->x86buff + line->currAddr + i) = ((char*)&buff)[bytes - 1 - i];
-        }
-    else{
-        for (int i = 0; i < bytes; i++){
-            *(line->x86buff + line->currAddr + i) = ((char*)&buff)[i];
-        }
-    }
+    memcpy(line->x86buff + line->currAddr, str, len);
 
-    line->currAddr += bytes;
+    line->currAddr += (len);
 
     return OK;
 }
 
 
 static int PushReg(line_t* line, int reg){
-    BYTE(PUSHR + reg);
+    BYTE_NUM(PUSHR + reg);
 
     return OK;
 }
@@ -292,8 +296,8 @@ static int PushReg(line_t* line, int reg){
 static int PushMem(line_t* line, int mem){
     int adr = line->currAddr;
 
-    BYTE(0xFF); //opcode
-    BYTE(0x35); // WHY???
+    EMIT("\xFF"); //opcode
+    EMIT("\x35"); // WHY???
 
     int offset = mem - (adr + 6);
 
@@ -305,16 +309,16 @@ static int PushMem(line_t* line, int mem){
 }
 
 static int PushMemRBP(line_t* line, int offset){
-    BYTE(0xFF); //opcode
-    BYTE(0x75); // WHY???
+    EMIT("\xFF"); //opcode
+    EMIT("\x75"); // WHY???
 
-    BYTE(offset);
+    BYTE_NUM(offset);
 
     return OK;
 }
 
 static int PushNum(line_t* line, int num){
-    BYTE(0x68); //opcode
+    EMIT("\x68"); //opcode
 
     DWORD_NUM(num);
 
@@ -322,7 +326,7 @@ static int PushNum(line_t* line, int num){
 }
 
 static int PopReg(line_t* line, int reg){
-    BYTE(POPR + reg);
+    BYTE_NUM(POPR + reg);
 
     return OK;
 }
@@ -330,8 +334,8 @@ static int PopReg(line_t* line, int reg){
 static int PopMem(line_t* line, int mem){
     int adr = line->currAddr;
 
-    BYTE(0x8F); //opcode
-    BYTE(0x05);
+    EMIT("\x8F"); //opcode
+    EMIT("\x05");
 
     int offset = mem - (adr + 6);
 
@@ -341,23 +345,23 @@ static int PopMem(line_t* line, int mem){
 }
 
 static int PopMemRBP(line_t* line, char offset){
-    BYTE(0x8F); //opcode
-    BYTE(0x45);
+    EMIT("\x8F"); //opcode
+    EMIT("\x45");
 
-    BYTE(offset);
+    BYTE_NUM(offset);
 
     return OK;
 }
 
 static int MovReg2Reg64(line_t* line, int from, int to){
-    BYTE(0x48); // REX.W
-    BYTE(0x89); // reg to reg/mem (move opcode)
+    EMIT("\x48"); // REX.W
+    EMIT("\x89"); // reg to reg/mem (move opcode)
 
     char modRM = 0b11000000;
     modRM |= from;
     modRM |= to << 3;
 
-    BYTE(modRM);
+    BYTE_NUM(modRM);
 
     return OK;
 }
@@ -366,18 +370,18 @@ static int MovReg2Reg64(line_t* line, int from, int to){
 static int MovReg2Mem64(line_t* line, int from, int to, int order){
     int adr = line->currAddr;
 
-    BYTE(0x48); // REX.W
+    EMIT("\x48"); // REX.W
 
     if (!order){
-        BYTE(0x89); // reg to reg/mem (move opcode)
+        EMIT("\x89"); // reg to reg/mem (move opcode)
     }
     else{
-        BYTE(0x8B);
+        EMIT("\x8B");
     }
     char modRM = 0b00000101;
     modRM |= from << 3;
 
-    BYTE(modRM);
+    BYTE_NUM(modRM);
 
     int offset = to - (adr + 7); // 7 == length of command
 
@@ -414,7 +418,7 @@ static int EndProcess(line_t* line){
 
     //bin, call stdExit
     int adr = line->currAddr;
-    BYTE(0xE8);
+    EMIT("\xE8");
 
     int offset = OFFSET + line->stdFuncsOffset[2] - (adr + 5);
     DWORD_NUM(offset);
@@ -570,9 +574,9 @@ static int NodeProcess(line_t* line, node_t* node, int param){
         }
 
         else if (line->id[node->data.id].visibilityType == LOCAL){
-            PRNT_CUSTOM("pop qword [rbp - %d]", line->id[node->data.id].memAddr * 8); //???
+            PRNT_CUSTOM("pop qword [rbp + %d]", line->id[node->data.id].memAddr * 8 + 8); //???
 
-            POP_RBP(line->id[node->data.id].memAddr * 8 * (-1)); //bin
+            POP_RBP(line->id[node->data.id].memAddr * 8  + 8); //bin
         }
     }
 
@@ -584,9 +588,9 @@ static int NodeProcess(line_t* line, node_t* node, int param){
         }
 
         else{
-            PRNT_CUSTOM("push qword [rbp - %d]", line->id[node->data.id].memAddr * 8);
+            PRNT_CUSTOM("push qword [rbp + %d]", line->id[node->data.id].memAddr * 8 + 8);
 
-            PUSH_RBP(line->id[node->data.id].memAddr * 8 * (-1)); //bin
+            PUSH_RBP(line->id[node->data.id].memAddr * 8 + 8); //bin
         }
     }
     //ID
@@ -708,11 +712,11 @@ static int ProcessIf(line_t* line, node_t* node){
 
     //bin
     POP_REG(mRAX);
-    DWORD(0x4883F800); // cmp rax, 0
+    EMIT("\x48\x83\xF8\x00"); // cmp rax, 0    // "\x48\x83" "\xF8\x00"
     int adr = line->currAddr;
-    WORD(JZ);  // jz
+    EMIT(JZ);  // jz
     int ptr = line->currAddr;
-    DWORD(0x0); // space for filling later
+    EMIT("\x00\x00\x00\x00"); // space for filling later
     //bin
 
     NodeProcess(line, node->right, DFLT);
@@ -741,18 +745,18 @@ static int ProcessWhile(line_t* line, node_t* node){
 
     //bin
     POP_REG(mRAX);
-    DWORD(0x4883F800); // cmp rax, 0
+    EMIT("\x48\x83\xF8\x00"); // cmp rax, 0
     int adr = line->currAddr;
-    WORD(JZ);  // jz
+    EMIT(JZ);  // jz
     int ptr = line->currAddr;
-    DWORD(0x0); // space for filling later
+    EMIT("\x00\x00\x00\x00"); // space for filling later
     //bin
 
     NodeProcess(line, node->right, DFLT);
 
     //bin
     int jmpAddr = line->currAddr;
-    BYTE(JMP);
+    EMIT(JMP);
     DWORD_NUM((begin) - (jmpAddr + JMP_SIZE));
     *(int*)(line->x86buff + ptr) = (line->currAddr) - (adr + JZ_SIZE);
     //bin
@@ -771,9 +775,9 @@ static int ProcessDef(line_t* line, node_t* node){
 
     //bin
     int adr = line->currAddr;
-    BYTE(JMP);
+    EMIT(JMP);
     int jmpAdr = line->currAddr;
-    DWORD(0x0);
+    EMIT("\x00\x00\x00\x00");
     //bin
 
     PRNT_CUSTOM("def_func%d:", node->left->left->data.id);
@@ -784,24 +788,11 @@ static int ProcessDef(line_t* line, node_t* node){
 
     PRNT("push rbp", " ");
     PRNT("mov rbp, rsp", " ");
-    PRNT_CUSTOM("sub rsp, %d", line->id[node->left->left->data.id].stackFrameSize * 8 + 8);
 
-    int params = line->id[node->left->left->data.id].numParams;
-    for (int i = params; i > 0; i--){
-        PRNT_CUSTOM("push qword [meow + %d]", i * 8);
-        PRNT_CUSTOM("pop qword [rbp - %d]", i * 8);
-    }
 
     //bin
     PUSH_REG(RBP);
     MOV_R2R(mRBP, mRSP);
-    WORD(0x4881); BYTE(0xEC); // sub rsp, num32
-    DWORD_NUM(line->id[node->left->left->data.id].stackFrameSize * 8 + 8);
-
-    for (int i = params; i > 0; i--){
-        PUSH_MEM(line->additionalBuff + 8 * i);
-        POP_RBP(-8 * i);
-    }
     //bin
 
     NodeProcess(line, node->right, DFLT);
@@ -820,23 +811,16 @@ static int ProcessCall(line_t* line, node_t* node){
 
     NodeProcess(line, node->left->right, DFLT);
 
-    int params = line->id[node->left->left->data.id].numParams; // num params
-
-    for (int i = params; i > 0; i--){
-        PRNT_CUSTOM("pop qword [meow + %d]", i * 8);
-    }
 
     PRNT_CUSTOM ("call def_func%d", node->left->left->data.id);
+    PRNT_CUSTOM ("add rsp, %d", line->id[node->left->left->data.id].stackFrameSize * 8);
     PRNT        ("push rax", " ");
 
     //bin
-
-    for (int i = params; i > 0; i--){
-        POP_MEM(line->additionalBuff + 8 * i);
-    }
     int callAdr = line->currAddr;
     int calleeAdr = line->id[node->left->left->data.id].memAddr;
-    BYTE(CALL); DWORD_NUM(calleeAdr - (callAdr + CALL_SIZE));
+    EMIT(CALL); DWORD_NUM(calleeAdr - (callAdr + CALL_SIZE));
+    EMIT("\x48\x83\xC4"); BYTE_NUM(line->id[node->left->left->data.id].stackFrameSize * 8); // add rsp, (framesize)
     PUSH_REG(RAX);
     //bin
 
@@ -856,7 +840,7 @@ static int ProcessOp(line_t* line, node_t* node){
 
             POP_REG(mRAX);
             POP_REG(mRBX);
-            WORD(0x4801); BYTE(0xD8); // add rax, rbx
+            EMIT("\x48\x01\xD8"); // add rax, rbx
             PUSH_REG(RAX);
 
             break;
@@ -870,7 +854,7 @@ static int ProcessOp(line_t* line, node_t* node){
 
             POP_REG(mRAX);
             POP_REG(mRBX);
-            WORD(0x4829); BYTE(0xD8); // sub rax, rbx
+            EMIT("\x48\x29\xD8"); // sub rax, rbx
             PUSH_REG(RAX);
 
             break;
@@ -884,7 +868,7 @@ static int ProcessOp(line_t* line, node_t* node){
 
             POP_REG(mRAX);
             POP_REG(mRBX);
-            DWORD(0x480FAFC3); // imul rax, rbx
+            EMIT("\x48\x0F\xAF\xC3"); // imul rax, rbx
             PUSH_REG(RAX);
 
             break;
@@ -905,13 +889,13 @@ static int ProcessOp(line_t* line, node_t* node){
 
             //bin
             POP_REG(mRAX);
-            DWORD(0x4883F800);                              // cmp rax, 0
-            WORD(JL); DWORD_NUM(0x3 + JMP_SIZE);            // 0x3 == SIZE_XOR
-            WORD(0x4831); BYTE(0xD2);                       // xor rdx, rdx
-            BYTE(JMP); DWORD_NUM(0x7);                      // 0x7 == SIZE_MOV
-            WORD(0x48C7); BYTE(0xC2); DWORD(0xFFFFFFFF);    // mov rdx, -1
+            EMIT("\x48\x83\xF8\x00");                      // cmp rax, 0
+            EMIT(JL); DWORD_NUM(0x3 + JMP_SIZE);            // 0x3 == SIZE_XOR
+            EMIT("\x48\x31\xD2");                           // xor rdx, rdx
+            EMIT(JMP); DWORD_NUM(0x7);                      // 0x7 == SIZE_MOV
+            EMIT("\x48\xC7\xC2\xFF\xFF\xFF\xFF");           // mov rdx, -1
             POP_REG(mRBX);
-            WORD(0x48F7); BYTE(0xFB);                       // idiv rbx
+            EMIT("\x48\xF7\xFB");                           // idiv rbx
             PUSH_REG(RAX);
             //bin
 
@@ -926,7 +910,7 @@ static int ProcessOp(line_t* line, node_t* node){
             POP_REG(mRSI);
 
             adr = line->currAddr;
-            BYTE(0xE8);     // call
+            EMIT("\xE8");     // call
 
             offset = OFFSET + line->stdFuncsOffset[1] - (adr + 5);
             DWORD_NUM(offset);
@@ -970,7 +954,7 @@ static int ProcessOp(line_t* line, node_t* node){
             POP_REG(mRAX);
             MOV_R2R(mRSP, mRBP);
             POP_REG(mRBP);
-            BYTE(RET);
+            EMIT(RET);
             //bin
 
             break;
@@ -995,10 +979,10 @@ static int ProcessOp(line_t* line, node_t* node){
             //bin
             POP_REG(mRAX);
             POP_REG(mRBX);
-            WORD(0x4839); BYTE(0xD8); // cmp rax, rbx
-            WORD(JL); DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
+            EMIT("\x48\x39\xD8");  // cmp rax, rbx
+            EMIT(JL); DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
             PUSH_NUM(0x00);
-            BYTE(JMP); DWORD_NUM(PUSH_NUM_SIZE);
+            EMIT(JMP); DWORD_NUM(PUSH_NUM_SIZE);
             PUSH_NUM(0x01);
             //bin
 
@@ -1034,10 +1018,10 @@ static int ProcessOp(line_t* line, node_t* node){
             //bin
             POP_REG(mRAX);
             POP_REG(mRBX);
-            WORD(0x4839); BYTE(0xD8); // cmp rax, rbx
-            WORD(JZ); DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
+            EMIT("\x48\x39\xD8");  // cmp rax, rbx
+            EMIT(JZ); DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
             PUSH_NUM(0x00);
-            BYTE(JMP); DWORD_NUM(PUSH_NUM_SIZE);
+            EMIT(JMP); DWORD_NUM(PUSH_NUM_SIZE);
             PUSH_NUM(0x01);
             //bin
 
@@ -1068,11 +1052,11 @@ static int ProcessOp(line_t* line, node_t* node){
             PRNT("push rax", " ");
 
             //bin
-            DWORD(0x660FEFC0);              // pxor xmm0, xmm0
+            EMIT("\x66\x0F\xEF\xC0");       // pxor xmm0, xmm0
             POP_REG(mRAX);
-            DWORD(0xF2480F2A); BYTE(0xC0);  // cvtsi2sd xmm0, rax
-            DWORD(0xF20F51C0);              // sqrtsd xmm0, xmm0
-            DWORD(0xF2480F2C); BYTE(0xC0);  // cvttsd2si rax, xmm0
+            EMIT( "\xF2\x48\x0F\x2A\xC0");  // cvtsi2sd xmm0, rax
+            EMIT("\xF2\x0F\x51\xC0");       // sqrtsd xmm0, xmm0
+            EMIT( "\xF2\x48\x0F\x2C\xC0");  // cvttsd2si rax, xmm0
             PUSH_REG(RAX);
             //bin
 
