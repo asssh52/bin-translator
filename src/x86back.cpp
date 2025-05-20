@@ -19,25 +19,28 @@
 
 #define PRNT_CUSTOM_DATA(...)       PlaceSpaces(line, fprintf(line->files.out, __VA_ARGS__), __LINE__, 1)
 
-#define EMIT(str)               PutWord(line, str, sizeof(str) - 1);
+#define EMIT_LST(str, name, ...)    PutWord(line, str, sizeof(str) - 1);\
+                                    PRNT(name, __VA_ARGS__);\
+
+#define EMIT(str)               PutWord(line, str, sizeof(str) - 1);\
 
 #define QWORD_NUM(num)          *(int64_t*)(line->x86buff + line->currAddr) = num;  line->currAddr += 8;
 #define DWORD_NUM(num)          *(int*)    (line->x86buff + line->currAddr) = num;  line->currAddr += 4;
 #define WORD_NUM(num)           *(int16_t*)(line->x86buff + line->currAddr) = num;  line->currAddr += 2;
 #define BYTE_NUM(num)           *(char*)   (line->x86buff + line->currAddr) = num;  line->currAddr += 1;
 
-#define PUSH_NUM(num)           PushNum(line, num);
-#define PUSH_REG(reg)           PushReg(line, reg);
-#define PUSH_MEM(mem)           PushMem(line, mem);
-#define PUSH_RBP(offset)        PushMemRBP(line, offset);
+#define PUSH_NUM(num)                       PushNum(line, num);
+#define PUSH_REG(reg, name, ...)            PushReg(line, reg);             PRNT(name, __VA_ARGS__);
+#define PUSH_MEM(mem)                       PushMem(line, mem);
+#define PUSH_RBP(offset)                    PushMemRBP(line, offset);
 
-#define POP_REG(reg)            PopReg (line, reg);
-#define POP_MEM(mem)            PopMem(line, mem);
-#define POP_RBP(offset)         PopMemRBP(line, offset);
+#define POP_REG(reg, name, ...)             PopReg (line, reg);             PRNT(name, __VA_ARGS__);
+#define POP_MEM(mem)                        PopMem(line, mem);
+#define POP_RBP(offset)                     PopMemRBP(line, offset);
 
-#define MOV_R2M(to, from)      MovReg2Mem64(line, from, to, DIRECT);
-#define MOV_M2R(to, from)      MovReg2Mem64(line, to, from, REVERSED);
-#define MOV_R2R(to, from)      MovReg2Reg64(line, to, from);
+#define MOV_R2M(to, from)                   MovReg2Mem64(line, from, to, DIRECT);
+#define MOV_M2R(to, from)                   MovReg2Mem64(line, to, from, REVERSED);
+#define MOV_R2R(to, from, name, ...)        MovReg2Reg64(line, to, from);   PRNT(name, __VA_ARGS__);
 
 //===============================================================================================================================================
 //          NOTES
@@ -51,6 +54,7 @@
 
 const char*   DFLT_HTML_FILE = "htmldump.html";
 const char*   DFLT_ELF_FILE  = "bobr";
+const char*   DFLT_LST_FILE  = "bobr.lst";
 const char*   DFLT_SAVE_FILE = "save.txt";
 const char*   DFLT_OUT_FILE  = "out.txt";
 const char*   DFLT_DOT_FILE  = "./bin/dot.dot";
@@ -190,14 +194,14 @@ static int ElfHeaderProcess(line_t* line){
     line->elfEhdr.e_type        = ET_EXEC;
     line->elfEhdr.e_machine     = EM_X86_64;
     line->elfEhdr.e_version     = EV_CURRENT;
-    line->elfEhdr.e_entry       = 0x0;  // filled later
-    line->elfEhdr.e_phoff       = 0x40; // pheader offset
+    line->elfEhdr.e_entry       = 0x0;                  // filled later
+    line->elfEhdr.e_phoff       = sizeof(Elf64_Ehdr);   // pheader offset
     line->elfEhdr.e_shoff       = 0x0;
     line->elfEhdr.e_flags       = 0x0;
-    line->elfEhdr.e_ehsize      = 0x40;
-    line->elfEhdr.e_phentsize   = 0x38;
-    line->elfEhdr.e_phnum       = 0x2;
-    line->elfEhdr.e_shentsize   = 0x40;
+    line->elfEhdr.e_ehsize      = sizeof(Elf64_Ehdr);
+    line->elfEhdr.e_phentsize   = sizeof(Elf64_Phdr);
+    line->elfEhdr.e_phnum       = 0x2;                  // num
+    line->elfEhdr.e_shentsize   = sizeof(Elf64_Shdr);
     line->elfEhdr.e_shnum       = 0x0;
     line->elfEhdr.e_shstrndx    = 0x0;
 
@@ -245,8 +249,6 @@ static int StdlibProcess(line_t* line){
     for (int i = 0; i < STDLIB_NUM_FUNC; i++){
         line->stdFuncsOffset[i] = *((int64_t*)(line->x86buff + stdFuncs) + i);
         line->stdFuncsOffset[i] -= MEM_START;
-
-        printf(PNK "stdFunc(%d):%lx, adr:%lx\n" RESET, i, line->stdFuncsOffset[i], stdFuncs + 8 * i);
     }
 
     line->globalVars = line->currAddr;
@@ -273,11 +275,7 @@ static int EndElfProcess(line_t* line){
 }
 
 static int PutWord(line_t* line, const char* str, int len){
-
-    printf("str:%d\n", len);
-
     memcpy(line->x86buff + line->currAddr, str, len);
-
     line->currAddr += (len);
 
     return OK;
@@ -290,17 +288,13 @@ static int PushReg(line_t* line, int reg){
     return OK;
 }
 
-//give addr example: to == line->globalVar + 8 * Num
+//addr example: mem == line->globalVar + 8 * Num
 static int PushMem(line_t* line, int mem){
     int adr = line->currAddr;
+    int offset = mem - (adr + 6);
 
     EMIT("\xFF"); //opcode
     EMIT("\x35"); // WHY???
-
-    int offset = mem - (adr + 6);
-
-    printf("offset in pushMem:0x%x, 0d%d\n", offset, offset);
-
     DWORD_NUM(offset);
 
     return OK;
@@ -331,12 +325,10 @@ static int PopReg(line_t* line, int reg){
 
 static int PopMem(line_t* line, int mem){
     int adr = line->currAddr;
+    int offset = mem - (adr + 6);
 
     EMIT("\x8F"); //opcode
     EMIT("\x05");
-
-    int offset = mem - (adr + 6);
-
     DWORD_NUM(offset);
 
     return OK;
@@ -418,10 +410,10 @@ static int EndProcess(line_t* line){
     int adr = line->currAddr;
     EMIT("\xE8");
 
-    int offset = OFFSET + line->stdFuncsOffset[2] - (adr + 5);
+    int offset = OFFSET + line->stdFuncsOffset[2] - (adr + CALL_SIZE);
     DWORD_NUM(offset);
 
-    line->currAddr += 5;
+    line->currAddr += CALL_SIZE;
     //bin
 
     FILE* fileLib = fopen(DFLT_LIB_FILE, "r");
@@ -553,42 +545,33 @@ static int NodeProcess(line_t* line, node_t* node, int param){
 
     // ID
     if (type == T_ID && param == EQL){
+        int memaddr = line->globalVars + 8 * node->data.id;
+
         if (line->id[node->data.id].visibilityType == GLOBAL && line->id[node->data.id].memAddr == 0){
-
-            PRNT("pop rax", " ");
-            PRNT_CUSTOM("mov qword [_%d], rax", node->data.id);
-
-            POP_REG(RAX);  //bin
-            MOV_R2M(line->globalVars + 8 * node->data.id, mRAX);
-
+            POP_REG(RAX, "pop rax");
+            MOV_R2M(memaddr, mRAX); PRNT_CUSTOM("mov qword [_%d], rax", node->data.id);
         }
 
         else if (line->id[node->data.id].visibilityType == GLOBAL && line->id[node->data.id].memAddr != 0){
-            PRNT("pop rax", " ");
-            PRNT_CUSTOM("mov qword [_%d], rax", node->data.id);
-
-            POP_REG(RAX);  //bin
-            MOV_R2M(line->globalVars + 8 * node->data.id, mRAX);
+            POP_REG(RAX, "pop rax");
+            MOV_R2M(memaddr, mRAX); PRNT_CUSTOM("mov qword [_%d], rax", node->data.id);
         }
 
         else if (line->id[node->data.id].visibilityType == LOCAL){
-            PRNT_CUSTOM("pop qword [rbp + %d]", line->id[node->data.id].memAddr * 8 + 8); //???
-
-            POP_RBP(line->id[node->data.id].memAddr * 8  + 8); //bin
+            int addr = line->id[node->data.id].memAddr * 8  + 8;
+            POP_RBP(addr); PRNT_CUSTOM("pop qword [rbp + %d]", addr);
         }
     }
 
     else if (type == T_ID && param != EQL){
         if (line->id[node->data.id].visibilityType == GLOBAL){
-            PRNT_CUSTOM("push qword [_%d]", node->data.id);
-
-            PUSH_MEM(line->globalVars + 8 * node->data.id); //bin
+            int memaddr = line->globalVars + 8 * node->data.id;
+            PUSH_MEM(memaddr); PRNT_CUSTOM("push qword [_%d]", node->data.id);
         }
 
         else{
-            PRNT_CUSTOM("push qword [rbp + %d]", line->id[node->data.id].memAddr * 8 + 8);
-
-            PUSH_RBP(line->id[node->data.id].memAddr * 8 + 8); //bin
+            int rbpaddr = line->id[node->data.id].memAddr * 8 + 8;
+            PUSH_RBP(rbpaddr); PRNT_CUSTOM("push qword [rbp + %d]", rbpaddr);
         }
     }
     //ID
@@ -597,9 +580,8 @@ static int NodeProcess(line_t* line, node_t* node, int param){
 
     // NUM
     if (type == T_NUM){
-        PRNT_CUSTOM("push %ld", (int64_t)node->data.num);
-
-        PUSH_NUM((int)node->data.num);  //casting may cause problems
+        int num = (int)node->data.num;
+        PUSH_NUM(num); PRNT_CUSTOM("push %d", num);
     }
     // NUM
 
@@ -703,63 +685,41 @@ static int ProcessIf(line_t* line, node_t* node){
 
     NodeProcess(line, node->left, DFLT);
 
-    PRNT    ("pop rax", "НАЧАЛО ИФА");
-    PRNT    ("cmp rax, 0");
-    PRNT_JMP("je end_if", " ");
-
-
-    //bin
-    POP_REG(mRAX);
-    EMIT("\x48\x83\xF8\x00"); // cmp rax, 0    // "\x48\x83" "\xF8\x00"
+    POP_REG(mRAX, "pop rax", "НАЧАЛО ИФА");
+    EMIT_LST("\x48\x83\xF8\x00", "cmp rax, 0");
     int adr = line->currAddr;
-    EMIT(JZ);  // jz
+    EMIT(JZ); PRNT_JMP("je end_if", " ");
     int ptr = line->currAddr;
     EMIT("\x00\x00\x00\x00"); // space for filling later
-    //bin
 
     NodeProcess(line, node->right, DFLT);
 
-    //bin
-    *(int*)(line->x86buff + ptr) = (line->currAddr) - (adr + 6);
-    //bin
-
+    *(int*)(line->x86buff + ptr) = (line->currAddr) - (adr + JZ_SIZE);
     PRNT_JMP_MARK("end_if", " ");
+
 
     return OK;
 }
 
 static int ProcessWhile(line_t* line, node_t* node){
-    PRNT_JMP_MARK("while", "НАЧАЛО ЦИКЛА");
 
-    //bin
-    int begin = line->currAddr;
-    //bin
+    int begin = line->currAddr; PRNT_JMP_MARK("while", "НАЧАЛО ЦИКЛА");
 
     NodeProcess(line, node->left, DFLT);
 
-    PRNT    ("pop rax");
-    PRNT    ("cmp rax, 0");
-    PRNT_JMP("je end_while", " ");
-
-    //bin
-    POP_REG(mRAX);
-    EMIT("\x48\x83\xF8\x00"); // cmp rax, 0
+    POP_REG(mRAX, "pop rax");
+    EMIT_LST("\x48\x83\xF8\x00", "cmp rax, 0");
     int adr = line->currAddr;
-    EMIT(JZ);  // jz
+    EMIT(JZ); PRNT_JMP("jz end_while", " ");
     int ptr = line->currAddr;
     EMIT("\x00\x00\x00\x00"); // space for filling later
-    //bin
 
     NodeProcess(line, node->right, DFLT);
 
-    //bin
     int jmpAddr = line->currAddr;
-    EMIT(JMP);
+    EMIT(JMP); PRNT_JMP("jmp while", "");
     DWORD_NUM((begin) - (jmpAddr + JMP_SIZE));
     *(int*)(line->x86buff + ptr) = (line->currAddr) - (adr + JZ_SIZE);
-    //bin
-
-    PRNT_JMP("jmp while", " ");
     PRNT_JMP_MARK("end_while", " ");
 
     return OK;
@@ -767,60 +727,43 @@ static int ProcessWhile(line_t* line, node_t* node){
 
 static int ProcessDef(line_t* line, node_t* node){
     ProcessArgs(line, node);
+    int funcId = node->left->left->data.id;
 
     PRNT(" ", "НАЧАЛО ОПРЕДЕЛЕНИЯ ФУНКЦИИ");
-    PRNT_CUSTOM("jmp def_func_end%d",   node->left->left->data.id);
-
-    //bin
     int adr = line->currAddr;
-    EMIT(JMP);
+    EMIT(JMP); PRNT_CUSTOM("jmp def_func_end%d", funcId);
     int jmpAdr = line->currAddr;
     EMIT("\x00\x00\x00\x00");
-    //bin
-
-    PRNT_CUSTOM("def_func%d:", node->left->left->data.id);
-
-    //bin
-    line->id[node->left->left->data.id].memAddr = line->currAddr; //save address
-    //bin
-
-    PRNT("push rbp", " ");
-    PRNT("mov rbp, rsp", " ");
 
 
-    //bin
-    PUSH_REG(RBP);
-    MOV_R2R(mRBP, mRSP);
-    //bin
+    PRNT_CUSTOM("def_func%d:", funcId);
+    line->id[funcId].memAddr = line->currAddr; //save address
+
+    PUSH_REG(RBP,       "push rbp");
+    MOV_R2R(mRBP, mRSP, "mov rbp, rsp");
 
     NodeProcess(line, node->right, DFLT);
 
-    //bin
     *(int*)(line->x86buff + jmpAdr) = (line->currAddr) - (adr + JMP_SIZE);
-    //bin
-
-    PRNT_CUSTOM("def_func_end%d:", node->left->left->data.id);
+    PRNT_CUSTOM("def_func_end%d:", funcId);
 
     return OK;
 }
 
 static int ProcessCall(line_t* line, node_t* node){
-    PRNT        (" ", "Я НАЧАЛО ВЫЗОВ ФУНКЦИЯ");
+    int funcId      = node->left->left->data.id;
+    int frameSize   = line->id[funcId].stackFrameSize * 8;
+    PRNT        (" ", "Я НАЧАЛО ВЫЗОВ ФУНКЦИИ");
 
     NodeProcess(line, node->left->right, DFLT);
 
-
-    PRNT_CUSTOM ("call def_func%d", node->left->left->data.id);
-    PRNT_CUSTOM ("add rsp, %d", line->id[node->left->left->data.id].stackFrameSize * 8);
-    PRNT        ("push rax", " ");
-
-    //bin
     int callAdr = line->currAddr;
     int calleeAdr = line->id[node->left->left->data.id].memAddr;
-    EMIT(CALL); DWORD_NUM(calleeAdr - (callAdr + CALL_SIZE));
-    EMIT("\x48\x83\xC4"); BYTE_NUM(line->id[node->left->left->data.id].stackFrameSize * 8); // add rsp, (framesize)
-    PUSH_REG(RAX);
-    //bin
+    EMIT(CALL); PRNT_CUSTOM("call def_func%d", funcId);
+    DWORD_NUM(calleeAdr - (callAdr + CALL_SIZE));
+    EMIT("\x48\x83\xC4"); PRNT_CUSTOM ("add rsp, %d", frameSize);
+    BYTE_NUM(frameSize);
+    PUSH_REG(RAX, "push rax");
 
     return OK;
 }
@@ -831,88 +774,60 @@ static int ProcessOp(line_t* line, node_t* node){
     switch (node->data.op){
         // +
         case O_ADD:
-            PRNT("pop rax", "ПЛЮС");
-            PRNT("pop rbx", " ");
-            PRNT("add rax, rbx", " ");
-            PRNT("push rax", " ");
 
-            POP_REG(mRAX);
-            POP_REG(mRBX);
-            EMIT("\x48\x01\xD8"); // add rax, rbx
-            PUSH_REG(RAX);
+            POP_REG(mRAX,               "pop rax");
+            POP_REG(mRBX,               "pop rbx");
+            EMIT_LST("\x48\x01\xD8",    "add rax, rbx");
+            PUSH_REG(RAX,               "push rax");
 
             break;
 
         // -
         case O_SUB:
-            PRNT("pop rax", "МИНУС");
-            PRNT("pop rbx", " ");
-            PRNT("sub rax, rbx", " ");
-            PRNT("push rax", " ");
 
-            POP_REG(mRAX);
-            POP_REG(mRBX);
-            EMIT("\x48\x29\xD8"); // sub rax, rbx
-            PUSH_REG(RAX);
+            POP_REG(mRAX,               "pop rax");
+            POP_REG(mRBX,               "pop rbx");
+            EMIT_LST("\x48\x29\xD8",    "sub rax, rbx");
+            PUSH_REG(RAX,               "push rax");
 
             break;
 
         // *
         case O_MUL:
-            PRNT("pop rax", "УМНОЖИТЬ");
-            PRNT("pop rbx", " ");
-            PRNT("imul rax, rbx", " ");
-            PRNT("push rax", " ");
 
-            POP_REG(mRAX);
-            POP_REG(mRBX);
-            EMIT("\x48\x0F\xAF\xC3"); // imul rax, rbx
-            PUSH_REG(RAX);
+            POP_REG(mRAX,                   "pop rax");
+            POP_REG(mRBX,                   "pop rbx");
+            EMIT_LST("\x48\x0F\xAF\xC3",    "imul rax, rbx");
+            PUSH_REG(RAX,                   "push rax");
 
             break;
 
         // /
         case O_DIV:
-            PRNT("pop rax", "ДЕЛИТЬ");
-            PRNT("cmp rax, 0", "");
-            PRNT_JMP("jl div", "");
-            PRNT("xor rdx, rdx", "");
-            PRNT_JMP("jmp div_end", "");
-            PRNT_JMP_MARK("div", "");
-            PRNT("mov rdx, -1", "");
-            PRNT_JMP_MARK("div_end", "");
-            PRNT("pop rbx", " ");
-            PRNT("idiv rbx", " ");
-            PRNT("push rax", " ");
 
-            //bin
-            POP_REG(mRAX);
-            EMIT("\x48\x83\xF8\x00");                      // cmp rax, 0
-            EMIT(JL); DWORD_NUM(0x3 + JMP_SIZE);            // 0x3 == SIZE_XOR
-            EMIT("\x48\x31\xD2");                           // xor rdx, rdx
-            EMIT(JMP); DWORD_NUM(0x7);                      // 0x7 == SIZE_MOV
-            EMIT("\x48\xC7\xC2\xFF\xFF\xFF\xFF");           // mov rdx, -1
-            POP_REG(mRBX);
-            EMIT("\x48\xF7\xFB");                           // idiv rbx
-            PUSH_REG(RAX);
-            //bin
+            POP_REG(mRAX,                                   "pop rax");
+            EMIT_LST("\x48\x83\xF8\x00",                    "cmp rax, 0");
+            EMIT(JL); PRNT_JMP(                             "jl div", "");
+            DWORD_NUM(0x3 + JMP_SIZE); // 0x3 == SIZE_XOR
+            EMIT_LST("\x48\x31\xD2",                        "xor rdx, rdx");
+            EMIT(JMP); PRNT_JMP(                            "jmp div_end", "");
+            DWORD_NUM(0x7);            // 0x7 == SIZE_MOV
+            PRNT_JMP_MARK("div", "");
+            EMIT_LST("\x48\xC7\xC2\xFF\xFF\xFF\xFF",        "mov rdx, -1");
+            POP_REG(mRBX,                                   "pop rbx");
+            EMIT_LST("\x48\xF7\xFB",                        "idiv rbx");
+            PUSH_REG(RAX,                                   "push rax");
 
             break;
 
         // print
         case O_PNT:
-            PRNT("pop rsi", "ПЕЧАТЬ");
-            PRNT("call [std + 8]", "ПЕЧАТЬ");
 
-            //bin
-            POP_REG(mRSI);
-
+            POP_REG(mRSI,           "pop rsi");
             adr = line->currAddr;
-            EMIT("\xE8");     // call
-
-            offset = OFFSET + line->stdFuncsOffset[1] - (adr + 5);
+            EMIT_LST("\xE8",        "call [std + 8]");
+            offset = OFFSET + line->stdFuncsOffset[1] - (adr + CALL_SIZE);
             DWORD_NUM(offset);
-            //bin
 
             break;
 
@@ -943,17 +858,11 @@ static int ProcessOp(line_t* line, node_t* node){
 
         // return
         case O_RET:
-            PRNT("pop rax", " ");
-            PRNT("mov rsp, rbp", " ");
-            PRNT("pop rbp", " ");
-            PRNT("ret", " ");
 
-            //bin
-            POP_REG(mRAX);
-            MOV_R2R(mRSP, mRBP);
-            POP_REG(mRBP);
-            EMIT(RET);
-            //bin
+            POP_REG(mRAX,       "pop rax");
+            MOV_R2R(mRSP, mRBP, "mov rsp, rbp");
+            POP_REG(mRBP,       "pop rbp");
+            EMIT_LST(RET,       "ret");
 
             break;
 
@@ -964,25 +873,18 @@ static int ProcessOp(line_t* line, node_t* node){
 
         // <
         case O_LES:
-            PRNT("pop rax", "МЕНЬШЕ");
-            PRNT("pop rbx", " ");
-            PRNT("cmp rax, rbx", " ");
-            PRNT_JMP("jl less", "");
-            PRNT("push 0d", " ");
-            PRNT_JMP("jmp less_end", "");
-            PRNT_JMP_MARK("less", "");
-            PRNT("push 1d", "");
-            PRNT_JMP_MARK("less_end", "МЕНЬШЕ КОНЕЦ");
 
-            //bin
-            POP_REG(mRAX);
-            POP_REG(mRBX);
-            EMIT("\x48\x39\xD8");  // cmp rax, rbx
-            EMIT(JL); DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
-            PUSH_NUM(0x00);
-            EMIT(JMP); DWORD_NUM(PUSH_NUM_SIZE);
-            PUSH_NUM(0x01);
-            //bin
+            POP_REG(mRAX,                       "pop rax");
+            POP_REG(mRBX,                       "pop rbx");
+            EMIT_LST("\x48\x39\xD8",            "cmp rax, rbx");
+            EMIT(JL); PRNT_JMP(                 "jl less", "");
+            DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
+            PUSH_NUM(0x00) PRNT(                "push 0d");
+            EMIT(JMP); PRNT_JMP(                "jmp less_end", "");
+            DWORD_NUM(PUSH_NUM_SIZE);
+            PRNT_JMP_MARK(                      "less", "");
+            PUSH_NUM(0x01) PRNT(                "push 1d");
+            PRNT_JMP_MARK(                      "less_end", "");
 
             break;
 
@@ -1003,25 +905,18 @@ static int ProcessOp(line_t* line, node_t* node){
 
         // ==
         case O_EQQ:
-            PRNT("pop rax", "РАВНО");
-            PRNT("pop rbx", " ");
-            PRNT("cmp rax, rbx", " ");
-            PRNT_JMP("je eq", "");
-            PRNT("push 0d", " ");
-            PRNT_JMP("jmp eq_end", "");
-            PRNT_JMP_MARK("eq", "");
-            PRNT("push 1d", "");
-            PRNT_JMP_MARK("eq_end", "РАВНО КОНЕЦ");
 
-            //bin
-            POP_REG(mRAX);
-            POP_REG(mRBX);
-            EMIT("\x48\x39\xD8");  // cmp rax, rbx
-            EMIT(JZ); DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
-            PUSH_NUM(0x00);
-            EMIT(JMP); DWORD_NUM(PUSH_NUM_SIZE);
-            PUSH_NUM(0x01);
-            //bin
+            POP_REG(mRAX,                       "pop rax");
+            POP_REG(mRBX,                       "pop rbx");
+            EMIT_LST("\x48\x39\xD8",            "cmp rax, rbx");
+            EMIT(JZ); PRNT_JMP(                 "jz eq", "");
+            DWORD_NUM(JMP_SIZE + PUSH_NUM_SIZE);
+            PUSH_NUM(0x0); PRNT(                "push 0d");
+            EMIT(JMP); PRNT_JMP(                "jmp eq_end", "");
+            DWORD_NUM(PUSH_NUM_SIZE);
+            PRNT_JMP_MARK(                      "eq", "");
+            PUSH_NUM(0x01);PRNT(                "push 1d");
+            PRNT_JMP_MARK(                      "eq_end", "");
 
             break;
 
@@ -1042,21 +937,13 @@ static int ProcessOp(line_t* line, node_t* node){
 
         // sqrt
         case O_SQT:
-            PRNT("pxor xmm0, xmm0", " ");
-            PRNT("pop rax", " ");
-            PRNT("cvtsi2sd xmm0, rax", " ");
-            PRNT("sqrtsd xmm0, xmm0", " ");
-            PRNT("cvttsd2si rax, xmm0", " ");
-            PRNT("push rax", " ");
 
-            //bin
-            EMIT("\x66\x0F\xEF\xC0");       // pxor xmm0, xmm0
-            POP_REG(mRAX);
-            EMIT( "\xF2\x48\x0F\x2A\xC0");  // cvtsi2sd xmm0, rax
-            EMIT("\xF2\x0F\x51\xC0");       // sqrtsd xmm0, xmm0
-            EMIT( "\xF2\x48\x0F\x2C\xC0");  // cvttsd2si rax, xmm0
-            PUSH_REG(RAX);
-            //bin
+            EMIT_LST("\x66\x0F\xEF\xC0",            "pxor xmm0, xmm0");
+            POP_REG(mRAX,                           "pop rax");
+            EMIT_LST( "\xF2\x48\x0F\x2A\xC0",       "cvtsi2sd xmm0, rax");
+            EMIT_LST("\xF2\x0F\x51\xC0",            "sqrtsd xmm0, xmm0");
+            EMIT_LST( "\xF2\x48\x0F\x2C\xC0",       "cvttsd2si rax, xmm0");
+            PUSH_REG(RAX,                           "push rax");
 
             break;
 
