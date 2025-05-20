@@ -548,12 +548,14 @@ static int NodeProcess(line_t* line, node_t* node, int param){
         int memaddr = line->globalVars + 8 * node->data.id;
 
         if (line->id[node->data.id].visibilityType == GLOBAL && line->id[node->data.id].memAddr == 0){
-            POP_REG(RAX, "pop rax");
+
+            POP_REG(RAX,                        "pop rax");
             MOV_R2M(memaddr, mRAX); PRNT_CUSTOM("mov qword [_%d], rax", node->data.id);
         }
 
         else if (line->id[node->data.id].visibilityType == GLOBAL && line->id[node->data.id].memAddr != 0){
-            POP_REG(RAX, "pop rax");
+
+            POP_REG(RAX,                        "pop rax");
             MOV_R2M(memaddr, mRAX); PRNT_CUSTOM("mov qword [_%d], rax", node->data.id);
         }
 
@@ -685,17 +687,17 @@ static int ProcessIf(line_t* line, node_t* node){
 
     NodeProcess(line, node->left, DFLT);
 
-    POP_REG(mRAX, "pop rax", "НАЧАЛО ИФА");
-    EMIT_LST("\x48\x83\xF8\x00", "cmp rax, 0");
+    POP_REG(mRAX,                               "pop rax", "НАЧАЛО ИФА");
+    EMIT_LST("\x48\x83\xF8\x00",                "cmp rax, 0");
     int adr = line->currAddr;
-    EMIT(JZ); PRNT_JMP("je end_if", " ");
+    EMIT(JZ); PRNT_JMP(                         "je end_if", " ");
     int ptr = line->currAddr;
     EMIT("\x00\x00\x00\x00"); // space for filling later
 
     NodeProcess(line, node->right, DFLT);
 
     *(int*)(line->x86buff + ptr) = (line->currAddr) - (adr + JZ_SIZE);
-    PRNT_JMP_MARK("end_if", " ");
+    PRNT_JMP_MARK(                              "end_if", " ");
 
 
     return OK;
@@ -703,24 +705,24 @@ static int ProcessIf(line_t* line, node_t* node){
 
 static int ProcessWhile(line_t* line, node_t* node){
 
-    int begin = line->currAddr; PRNT_JMP_MARK("while", "НАЧАЛО ЦИКЛА");
+    int begin = line->currAddr; PRNT_JMP_MARK(  "while", "НАЧАЛО ЦИКЛА");
 
     NodeProcess(line, node->left, DFLT);
 
-    POP_REG(mRAX, "pop rax");
-    EMIT_LST("\x48\x83\xF8\x00", "cmp rax, 0");
+    POP_REG(mRAX,                               "pop rax");
+    EMIT_LST("\x48\x83\xF8\x00",                "cmp rax, 0");
     int adr = line->currAddr;
-    EMIT(JZ); PRNT_JMP("jz end_while", " ");
+    EMIT(JZ); PRNT_JMP(                         "jz end_while", " ");
     int ptr = line->currAddr;
     EMIT("\x00\x00\x00\x00"); // space for filling later
 
     NodeProcess(line, node->right, DFLT);
 
     int jmpAddr = line->currAddr;
-    EMIT(JMP); PRNT_JMP("jmp while", "");
+    EMIT(JMP); PRNT_JMP(                        "jmp while", "");
     DWORD_NUM((begin) - (jmpAddr + JMP_SIZE));
     *(int*)(line->x86buff + ptr) = (line->currAddr) - (adr + JZ_SIZE);
-    PRNT_JMP_MARK("end_while", " ");
+    PRNT_JMP_MARK(                              "end_while", " ");
 
     return OK;
 }
@@ -731,21 +733,21 @@ static int ProcessDef(line_t* line, node_t* node){
 
     PRNT(" ", "НАЧАЛО ОПРЕДЕЛЕНИЯ ФУНКЦИИ");
     int adr = line->currAddr;
-    EMIT(JMP); PRNT_CUSTOM("jmp def_func_end%d", funcId);
+    EMIT(JMP); PRNT_CUSTOM(                     "jmp def_func_end%d", funcId);
     int jmpAdr = line->currAddr;
     EMIT("\x00\x00\x00\x00");
 
 
-    PRNT_CUSTOM("def_func%d:", funcId);
-    line->id[funcId].memAddr = line->currAddr; //save address
+    PRNT_CUSTOM(                                "def_func%d:", funcId);
+    line->id[funcId].memAddr = line->currAddr;
 
-    PUSH_REG(RBP,       "push rbp");
-    MOV_R2R(mRBP, mRSP, "mov rbp, rsp");
+    PUSH_REG(RBP,                               "push rbp");
+    MOV_R2R(mRBP, mRSP,                         "mov rbp, rsp");
 
     NodeProcess(line, node->right, DFLT);
 
     *(int*)(line->x86buff + jmpAdr) = (line->currAddr) - (adr + JMP_SIZE);
-    PRNT_CUSTOM("def_func_end%d:", funcId);
+    PRNT_CUSTOM(                                "def_func_end%d:", funcId);
 
     return OK;
 }
@@ -759,11 +761,11 @@ static int ProcessCall(line_t* line, node_t* node){
 
     int callAdr = line->currAddr;
     int calleeAdr = line->id[node->left->left->data.id].memAddr;
-    EMIT(CALL); PRNT_CUSTOM("call def_func%d", funcId);
+    EMIT(CALL); PRNT_CUSTOM(                    "call def_func%d", funcId);
     DWORD_NUM(calleeAdr - (callAdr + CALL_SIZE));
-    EMIT("\x48\x83\xC4"); PRNT_CUSTOM ("add rsp, %d", frameSize);
+    EMIT("\x48\x83\xC4"); PRNT_CUSTOM (         "add rsp, %d", frameSize);
     BYTE_NUM(frameSize);
-    PUSH_REG(RAX, "push rax");
+    PUSH_REG(RAX,                               "push rax");
 
     return OK;
 }
