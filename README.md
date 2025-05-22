@@ -12,13 +12,15 @@
 - Место для хранения глобальных переменных
 - Код программы пользователя
 
-Из главных отличий нашей архетиктуры исполняемого файла от выдаваемых промышленными компиляторами файлов определённо стоит отметить:
+Из главных отличий нашей архитектуры исполняемого файла от выдаваемых промышленными компиляторами файлов определённо стоит отметить:
 
 -  расположение 'секции' с глобальными переменными находится в той же части программы, где находится исполняемый код, такое решение вынуждает выставить флаги в **Programm header**'е с разрешениями **READ/WRITE/EXECUTE**, хотя обычно компиляторы разделяют эти секции на **.text** с **READ/EXECUTE** и **.data** с **READ/WRITE**.
 
 - генерируемый исполняемый код программы пользователя не использует абсолютной адресации, вследствие чего является перемещаемым.
 
 Стандартная библиотека включает в себя несколько необходимых для трансляции функций, предусмотренных языком, таких как вывод десятичного числа и завершение программы.
+
+Из важных фишек, хочется отметить, что за счёт поддерживания общего стандарта промежуточного AST-дерева, возможно использование фронтенда другого языка на этом же стандарте и компиляция на нашем бэкенде, некоторые из языков, которые поддерживают стандарт: [ParrotLanguage](https://github.com/AndreyBritvin/my_language), [EldenLanguage](https://github.com/coffee8cat/Elden-language). Пример трансляции будет показан ниже.
 
 ### Пример трансляции кода
 
@@ -35,6 +37,7 @@ sigma b$
 <summary>AST-дерево</summary>
 
 ```
+434-format v1.5
 {OP:";"
 	{OP:"="
 		{ID:"a"}
@@ -70,7 +73,7 @@ mov qword [_0], rax             ;line:557	node:002
                                 ;line:944	node:001
 push 5                          ;line:598	node:009
 push qword [_0]                 ;line:581	node:008
-pop rax                         ;line:852	node:007	 ПЛЮС
+pop rax                         ;line:852	node:007
 
 pop rbx                         ;line:853	node:007
 add rax, rbx                    ;line:854	node:007
@@ -95,6 +98,228 @@ call [std + 16]
 <div align="center">
 Код программы пользователя в исполняемом файле.
 </div>
+
+### Пример трансляции кода с ParrotLanguage и EldenLanguage.
+В обеих программах представлена рекурсивная версия подсчёта факториала.
+
+**EldenLang:**
+```
+The fallen leaves tell us a story of the FACTORIAL shine upon the ring of Tarnished
+{
+    And when the stars will fall along with the ring of Tarnished equal with Starling amber, bless them with
+    {
+        Bless thy tarnished with Starling amber;
+    };
+
+    the ring of Malenia forged;
+    And now the ring of Malenia is the ring of Tarnished shadowed by Starling amber;
+    And now the ring of Malenia is Letting thy grace of FACTORIAL shine upon the ring of Malenia here enchanted with the ring of Tarnished;
+    Bless thy tarnished with the ring of Malenia;
+};
+
+the ring of Michella forged;
+And now the ring of Michella is pure golden needle;
+
+the ring of Maliketh forged;
+And now the ring of Maliketh is Letting thy grace of FACTORIAL shine upon the ring of Michella here;
+
+In the age of Duskborn the ring of Maliketh will thunder in the darkest night;
+$
+```
+
+<details>
+<summary>AST-дерево</summary>
+
+```
+434-format v1.5
+{OP:";"
+	{OP:"def"
+		{OP:"spec"
+			{ID:"FACTORIAL"}
+			{OP:","
+				{ID:"Tarnished"}
+			}
+		}
+		{OP:";"
+			{OP:";"
+				{OP:";"
+					{OP:";"
+						{OP:"if"
+							{OP:"=="
+								{ID:"Tarnished"}
+								{NUM:"1"}
+							}
+							{OP:"return"
+								{NUM:"1"}
+							}
+						}
+						{OP:"="
+							{ID:"Malenia"}
+							{NUM:"0"}
+						}
+					}
+					{OP:"="
+						{ID:"Malenia"}
+						{OP:"-"
+							{ID:"Tarnished"}
+							{NUM:"1"}
+						}
+					}
+				}
+				{OP:"="
+					{ID:"Malenia"}
+					{OP:"*"
+						{OP:"call"
+							{OP:"spec"
+								{ID:"FACTORIAL"}
+								{OP:","
+									{ID:"Malenia"}
+								}
+							}
+						}
+						{ID:"Tarnished"}
+					}
+				}
+			}
+			{OP:"return"
+				{ID:"Malenia"}
+			}
+		}
+	}
+	{OP:";"
+		{OP:";"
+			{OP:";"
+				{OP:";"
+					{OP:"="
+						{ID:"Michella"}
+						{NUM:"0"}
+					}
+					{OP:"="
+						{ID:"Michella"}
+						{NUM:"4"}
+					}
+				}
+				{OP:"="
+					{ID:"Maliketh"}
+					{NUM:"0"}
+				}
+			}
+			{OP:"="
+				{ID:"Maliketh"}
+				{OP:"call"
+					{OP:"spec"
+						{ID:"FACTORIAL"}
+						{OP:","
+							{ID:"Michella"}
+						}
+					}
+				}
+			}
+		}
+		{OP:"print"
+			{ID:"Maliketh"}
+		}
+	}
+}
+```
+</details>
+
+<br>
+
+
+<img src="./readmePNG/rd2.png">
+
+<div align="center">
+Дизассемблированный функция факториала.
+</div>
+
+<br>
+
+**ParrotLang:**
+
+```
+mimic feed(seed)
+{
+    count_seeds_in seed less 1:
+    {
+        forget_mimic_and_feed . blink
+    }
+
+    forget_mimic_and_feed seed growth feed(seed eat .) blink
+}
+
+cheekcheeryk feed(2) blink
+```
+
+
+<details>
+<summary>AST-дерево</summary>
+
+```
+434-format v1.5
+
+{OP:";"
+    {OP:"def"
+        {OP:"spec"
+            {ID:"feed"}
+            {OP:","
+                {ID:"seed"}
+            }
+        }
+        {OP:";"
+            {OP:"if"
+                {OP:"less"
+                    {ID:"seed"}
+                    {NUM:"1"}
+                }
+                {OP:";"
+                    {OP:"return"
+                        {NUM:"1"}
+                    }
+                }
+            }
+            {OP:";"
+                {OP:"return"
+                    {OP:"*"
+                        {ID:"seed"}
+                        {OP:"call"
+                            {OP:"spec"
+                                {ID:"feed"}
+                                {OP:","
+                                    {OP:"-"
+                                        {ID:"seed"}
+                                        {NUM:"1"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    {OP:";"
+        {OP:"print"
+            {OP:"call"
+                {OP:"spec"
+                    {ID:"feed"}
+                    {OP:","
+                        {NUM:"2"}
+                    }
+                }
+            }
+        }
+    }
+}
+```
+</details>
+
+<img src="./readmePNG/rd3.png">
+
+<div align="center">
+Другая функция факториала.
+</div>
+
 
 ### Полезные/использованные ссылки
 - [Кодировка x86-64 команд](https://wiki.osdev.org/X86-64_Instruction_Encoding#ModR.2FM)

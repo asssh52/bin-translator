@@ -1,0 +1,11 @@
+mimic feed(seed)
+{
+    count_seeds_in seed less 1:
+    {
+        forget_mimic_and_feed . blink
+    }
+
+    forget_mimic_and_feed seed growth feed(seed eat .) blink
+}
+
+cheekcheeryk feed(2) blink

@@ -3,26 +3,26 @@
 
 #define MEOW fprintf(stderr, PNK  "MEOW\n" RESET);
 
-#define PRNT_JMP_MARK(name, ...)    PlaceNumOp(line, fprintf(line->files.out, name "%lu:", node->id), __LINE__, 0, node);\
-                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");\
+#define PRNT_JMP_MARK(name, ...)    PlaceNumOp(line, fprintf(line->files.out, name "%lu:", node->id), __LINE__, 0, node); \
+                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");
 
-#define PRNT_JMP(name, ...)         PlaceNumOp(line, fprintf(line->files.out, name "%lu", node->id), __LINE__, 0, node);\
-                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");\
+#define PRNT_JMP(name, ...)         PlaceNumOp(line, fprintf(line->files.out, name "%lu", node->id), __LINE__, 0, node);  \
+                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");
 
-#define PRNT(name, ...)             PlaceNumOp(line, fprintf(line->files.out, name),                  __LINE__, 0, node);\
-                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");\
+#define PRNT(name, ...)             PlaceNumOp(line, fprintf(line->files.out, name),                  __LINE__, 0, node); \
+                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");
 
-#define PRNT_CUSTOM(...)            PlaceNumOp(line, fprintf(line->files.out, __VA_ARGS__), __LINE__, 1, node)
+#define PRNT_DATA(name, ...)        PlaceSpaces(line, fprintf(line->files.out, name),                 __LINE__, 0);       \
+                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");
 
-#define PRNT_DATA(name, ...)        PlaceSpaces(line, fprintf(line->files.out, name),                  __LINE__, 0); \
-                                    fprintf(line->files.out, " " __VA_ARGS__ "\n");\
+#define EMIT_LST(str, name, ...)    PutWord(line, str, sizeof(str) - 1);                                                  \
+                                    PRNT(name, __VA_ARGS__);
 
 #define PRNT_CUSTOM_DATA(...)       PlaceSpaces(line, fprintf(line->files.out, __VA_ARGS__), __LINE__, 1)
 
-#define EMIT_LST(str, name, ...)    PutWord(line, str, sizeof(str) - 1);\
-                                    PRNT(name, __VA_ARGS__);\
+#define PRNT_CUSTOM(...)            PlaceNumOp (line, fprintf(line->files.out, __VA_ARGS__), __LINE__, 1, node)
 
-#define EMIT(str)               PutWord(line, str, sizeof(str) - 1);\
+#define EMIT(str)                   PutWord(line, str, sizeof(str) - 1);
 
 #define QWORD_NUM(num)          *(int64_t*)(line->x86buff + line->currAddr) = num;  line->currAddr += 8;
 #define DWORD_NUM(num)          *(int*)    (line->x86buff + line->currAddr) = num;  line->currAddr += 4;
@@ -48,7 +48,7 @@
 //  careful with .data in the end of stdlib.s
 //  max func arg == 16, (change command for pushing [rbp - c])
 //
-//
+//  htonl(), ntohl()
 //
 //===============================================================================================================================================
 
@@ -770,10 +770,10 @@ static int ProcessCall(line_t* line, node_t* node){
     return OK;
 }
 
-static int ProcessOp(line_t* line, node_t* node){
+static int ProcessOp (line_t* line, node_t* node) {
     int adr = 0, offset = 0;
 
-    switch (node->data.op){
+    switch (node->data.op) {
         // +
         case O_ADD:
 
